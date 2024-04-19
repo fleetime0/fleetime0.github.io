@@ -1,7 +1,7 @@
 ---
 title: vsomeip-sd模块源码分析
 date: 2024-04-17 14:57 +0800
-last_modified_at: 2024-04-19 10:52 +0800
+last_modified_at: 2024-04-19 11:21 +0800
 author: AClumsyDog
 categories: ["源码分析", "vsomeip"]
 tags: ["c++", "someip", "autosar"]
@@ -391,62 +391,87 @@ proxy这边的offer_service的逻辑，就是构建了一个VSOMEIP_OFFER_SERVIC
 从上可知，由于 SD 的实例只会在 routing_manager_impl 实例中创建和初始化一次，所以 routing_manager_proxy 路线的 offer_service() 只会通过 local_client_endpoint_impl 这个端口来传送，完成服务注册。而后续会按需由 routing_manager_impl 来通过 SD 实例接口将注册的服务发布给远端。
 
 ### 服务发现的offer_service 梳理
-几个关键容器：
-1.service_discovery_impl的私有map型容器collected_offers_，collected_offers_是一个三维数组[srvice][instance][info]，该变量通过service_discovery_impl::offer_service函数从outing_manager_base 的私有的 services_容器中拷贝而来所需要的serviceinfo，sd的stop_offer_service与之相反，collected_offers_变量会由on_offer_debounce_timer_expired函数读取
-2.rservice_discovery_impl的私有map型容器epetition_phase_timers_，该容器存放repetition_phase_timers_类型指针和services_t
+
+#### 多播报文的发送
+
+**几个关键容器：**
+
+1. service_discovery_impl的私有map型容器collected_offers_，collected_offers_是一个三维数组[srvice][instance][info]，该变量通过service_discovery_impl::offer_service函数从outing_manager_base 的私有的 services_容器中拷贝而来所需要的serviceinfo，sd的stop_offer_service与之相反，collected_offers_变量会由on_offer_debounce_timer_expired函数读取
+2. rservice_discovery_impl的私有map型容器epetition_phase_timers_，该容器存放repetition_phase_timers_类型指针和services_t
+
+**紧接上文的sd模块offer service讲解**
+如果使能了 `Service Discovery`，则调用:
 
 ```c++
-紧接上文的sd模块offer service
-如果使能了 Service Discovery，则调用:
 std::share_ptr<serviceinfo> its_info = find_service(_service, _instance);
 //--->find_service为routing_manager_base::find_service函数
 if (its_info) {
      discovery_ -> offer_service(its_info); // 通过 SD 实例来发送 offer service entry
  }
  offer_service(const std::shared_ptr<serviceinfo> &_info);
-从 collected_offers_ 容器中查找当前想要添加的服务是否存在，若不存在，则添加。该函数由 routing_manager_impl 调用
+```
+从 `collected_offers_ `容器中查找当前想要添加的服务是否存在，若不存在，则添加。该函数由 `routing_manager_impl `调用
 
-app层start()--->routing_manager_impl::start()->on_net_interface_or_route_state_changed->start_ip_routing()--->     
-    service_discovery_impl::start()
---->service_discovery_impl::start()
-    首先会检查sd的多播端口是否创建，其中，最主要的是调用以下函数：
+具体调用顺序为：`app层start()--->routing_manager_impl::start()->on_net_interface_or_route_state_changed->start_ip_routing()--->service_discovery_impl::start()
+--->service_discovery_impl::start()`.
+
+该函数首先会检查sd的多播端口是否创建，之后会调用以下函数：
+
+```c++
     start_main_phase_timer();
     start_offer_debounce_timer(true);
     start_find_debounce_timer(true);
     start_ttl_timer();
-    
---->start_main_phase_timer();
-    该函数会异步延时cyclic_offer_delay_之后执行on_main_phase_timer_expired函数
-    --->on_main_phase_timer_expired(const boost::system::error_code &_error);
-         --->send(true);//该函数调用service_discovery_impl::send(bool _is_announcing)
-              --->insert_offer_entries(its_messages, its_offers, false);
-              --->return send(its_messages);
-              在send(true)函数内会调用insert_offer_entries函数，该函数原型为insert_offer_entries(std::vector<std::shared_ptr<message_impl> > &_messages,const services_t &_services, bool _ignore_phase);
-              该函数具体代码为：                if ((_ignore_phase || its_instance.second->is_in_mainphase())
-                        && (its_instance.second->get_endpoint(false)
-                                || its_instance.second->get_endpoint(true))) {
-                    insert_offer_service(_messages, its_instance.second);
-                }
-            若第三个变量为false，则会判断对应的服务实例是否进入main阶段，若没有进入则不进行处理，直接返回，因此its_messages为空，在
-            send(its_messages);函数内，由于 its_messages 的entry字段为空，因此不会发送offer service报文。否则，若进入main阶    
-            段，则发送       
-         --->start_main_phase_timer();//然后重启main_phase定时器，循环往复
-         
---->start_offer_debounce_timer(true);
-    首先会判断是否第一次开始，若是首次开始，则初始化延时initial_delay_，否则延时offer_debounce_time_，该时间为去抖动时间，即两个发    
-    送报文最短时间间隔，然后会异步调用on_offer_debounce_timer_expired函数
-    
---->on_offer_debounce_timer_expired(const boost::system::error_code &_error);
-    该函数会依据collected_offers_内的服务发送第一个offer service报文，作为initial阶段结束，并将服务转移至
-    repetition_phase_timers_容器中，然后判断变量repetitions_max_是否为0，为0则延时cyclic_offer_delay_直接进入main阶段，否则
-    延时repetitions_base_delay_，并设置its_repetitions为1，统计循环发送offer service报文次数，待延时结束后，则直接异步调用
-    on_repetition_phase_timer_expired函数
-    
---->on_repetition_phase_timer_expired(const boost::system::error_code &_error,const std::shared_ptr<boost::asio::steady_timer>& _timer,std::uint8_t _repetition, std::uint32_t _last_delay)
-    该函数首先会判断重复次数是否剩余为0，为0则调用以下函数
-    --->move_offers_into_main_phase(_timer);
-        将repetition_phase_timers_容器中的服务is_in_mainphase属性设置为真，并将容器删除
-    然后会发送repetition_phase_timers_容器中保存的服务offer service报文，延时异步再次调用on_repetition_phase_timer_expired
-    函数，之后当发送次数达到repetitions_max_最大值时，则执行move_offers_into_main_phase函数
-至此，initial和repet阶段结束，offer service的服务服务is_in_mainphase属性为真，on_main_phase_timer_expired函数中的send开始正常执行，发送main阶段的offer service报文
 ```
+- `--->start_main_phase_timer();`
+      该函数会异步延时`cyclic_offer_delay_`之后执行`on_main_phase_timer_expired`函数
+
+  ```c++
+  --->on_main_phase_timer_expired(const boost::system::error_code &_error);
+       --->send(true);//该函数调用service_discovery_impl::send(bool _is_announcing)
+            --->insert_offer_entries(its_messages, its_offers, false);
+            --->return send(its_messages);
+            --->start_main_phase_timer();
+  ```
+  
+  在`send(true)`函数内会调用`insert_offer_entries`函数，该函数原型为:
+  
+  ```c++
+  insert_offer_entries(std::vector<std::shared_ptr<message_impl> > &_messages,const services_t &_services, bool _ignore_phase);
+  ```
+  
+  该函数具体代码为:
+  
+  ```c++
+   if ((_ignore_phase || its_instance.second->is_in_mainphase())
+   		&& (its_instance.second->get_endpoint(false)
+   		|| its_instance.second->get_endpoint(true))) {
+   	insert_offer_service(_messages, its_instance.second);
+   }
+  ```
+  
+  若第三个变量为`false`，则会判断对应的服务实例是否进入`main`阶段，若没有进入则不进行处理，直接返回，因此`its_messages`为空，然后再`send(its_messages); `      
+  
+  其中，由于 `its_messages `的`entry`字段为空，因此不会发送`offer service`报文。否则，代表进入`main`阶   段，开始循环`cyclic_offer_delay_`发送`offerservice`报文.
+
+  最后再调用`start_main_phase_timer();`重启main_phase定时器，循环往复
+
+- `--->start_offer_debounce_timer(true);`
+      首先会判断是否第一次开始，若是首次开始，则初始化延时`initial_delay_`，否则延时`offer_debounce_time_`，该时间为去抖动时间，即两个发送报文最短时间间隔，然后会异步调用`on_offer_debounce_timer_expired`函数
+     - `--->on_offer_debounce_timer_expired(const boost::system::error_code &_error);`
+           该函数会依据`collected_offers_`内的服务发送第一个`offer service`报文，作为`initial`阶段结束，并将服务转移至 `repetition_phase_timers`_容器中，然后判断变量`repetitions_max_`是否为0，为0则延时`cyclic_offer_delay_`直接进入`main`阶段，否则延时`repetitions_base_delay_`，并设置`its_repetitions`为1，统计循环发送`offer service`报文次数，待延时结束后，则直接异步调用`on_repetition_phase_timer_expired`函数.
+           该函数原型为：
+           ```c++
+           on_repetition_phase_timer_expired(const boost::system::error_code &_error,
+                    			const std::shared_ptr<boost::asio::steady_timer>&_timer,
+                               std::uint8_t _repetition, std::uint32_t _last_delay);
+         ```
+           该函数首先会判断重复次数是否剩余为0，为0则调用以下函数
+        
+        ```c++
+        move_offers_into_main_phase(_timer);
+        ```
+       
+        将`repetition_phase_timers_`容器中的服务`is_in_mainphase`属性设置为真，并将容器删除,然后会发送`repetition_phase_timers_`容器中保存的服务`offer service`报文，延时异步再次调用`on_repetition_phase_timer_expired`函数，之后当发送次数达到`repetitions_max_`最大值时，则执行`move_offers_into_main_phase`函数
+       至此，`initial`和`repet`阶段结束，`offer service`的服务服务`is_in_mainphase`属性为真，`on_main_phase_timer_expired`函数中的`send`开始正常执行，发送`main`阶段的`offer service`报文
+        
