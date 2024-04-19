@@ -396,33 +396,45 @@ proxy这边的offer_service的逻辑，就是构建了一个VSOMEIP_OFFER_SERVIC
 
 **几个关键容器：**
 
-1. service_discovery_impl的私有map型容器collected_offers_，collected_offers_是一个三维数组[srvice][instance][info]，该变量通过service_discovery_impl::offer_service函数从outing_manager_base 的私有的 services_容器中拷贝而来所需要的serviceinfo，sd的stop_offer_service与之相反，collected_offers_变量会由on_offer_debounce_timer_expired函数读取
-2. rservice_discovery_impl的私有map型容器epetition_phase_timers_，该容器存放repetition_phase_timers_类型指针和services_t
+1. service_discovery_impl的私有map型容器collected_offers\_，collected_offers\_是一个三维数组\[service]\[instance]\[info]，该变量通过service_discovery_impl::offer_service函数从outing_manager_base 的私有的 services\_容器中拷贝而来所需要的serviceinfo，sd的stop_offer_service与之相反，collected_offers_变量会由on_offer_debounce_timer_expired函数读取
+2. rservice_discovery_impl的私有map型容器epetition_phase_timers_，该容器存放repetition_phase_timers\_类型指针和services_t
 
 **紧接上文的sd模块offer service讲解**
-如果使能了 `Service Discovery`，则调用:
+如果使能了 Service Discovery，则调用:
 
 ```c++
-std::share_ptr<serviceinfo> its_info = find_service(_service, _instance);
 //--->find_service为routing_manager_base::find_service函数
+std::share_ptr<serviceinfo> its_info = find_service(_service, _instance);
 if (its_info) {
      discovery_ -> offer_service(its_info); // 通过 SD 实例来发送 offer service entry
  }
- offer_service(const std::shared_ptr<serviceinfo> &_info);
 ```
-从 `collected_offers_ `容器中查找当前想要添加的服务是否存在，若不存在，则添加。该函数由 `routing_manager_impl `调用
-
-具体调用顺序为：`app层start()--->routing_manager_impl::start()->on_net_interface_or_route_state_changed->start_ip_routing()--->service_discovery_impl::start()
---->service_discovery_impl::start()`.
-
-该函数首先会检查sd的多播端口是否创建，之后会调用以下函数：
+offer_service的声明如下：
 
 ```c++
-    start_main_phase_timer();
-    start_offer_debounce_timer(true);
-    start_find_debounce_timer(true);
-    start_ttl_timer();
+offer_service(const std::shared_ptr<serviceinfo> &_info)
 ```
+
+从 collected_offers_ 容器中查找当前想要添加的服务是否存在，若不存在，则添加。该函数由 routing_manager_impl 调用
+
+具体调用顺序为：
+
+```mermaid
+flowchart
+A("app层start()")-->B("routing_manager_impl::start()->on_net_interface_or_route_state_changed->start_ip_routing()")
+B-->C("local_client_endpoint_impl::send()")
+C-->D("service_discovery_impl::start()")
+```
+
+`service_discovery_impl::start()`函数首先会检查sd的多播端口是否创建，之后会调用以下函数：
+
+```c++
+ start_main_phase_timer();
+ start_offer_debounce_timer(true);
+ start_find_debounce_timer(true);
+ start_ttl_timer();
+```
+
 - `--->start_main_phase_timer();`
       该函数会异步延时`cyclic_offer_delay_`之后执行`on_main_phase_timer_expired`函数
 
@@ -465,13 +477,12 @@ if (its_info) {
            on_repetition_phase_timer_expired(const boost::system::error_code &_error,
                     			const std::shared_ptr<boost::asio::steady_timer>&_timer,
                                std::uint8_t _repetition, std::uint32_t _last_delay);
-         ```
+           ```
            该函数首先会判断重复次数是否剩余为0，为0则调用以下函数
-        
+              
         ```c++
         move_offers_into_main_phase(_timer);
         ```
        
         将`repetition_phase_timers_`容器中的服务`is_in_mainphase`属性设置为真，并将容器删除,然后会发送`repetition_phase_timers_`容器中保存的服务`offer service`报文，延时异步再次调用`on_repetition_phase_timer_expired`函数，之后当发送次数达到`repetitions_max_`最大值时，则执行`move_offers_into_main_phase`函数
        至此，`initial`和`repet`阶段结束，`offer service`的服务服务`is_in_mainphase`属性为真，`on_main_phase_timer_expired`函数中的`send`开始正常执行，发送`main`阶段的`offer service`报文
-        
