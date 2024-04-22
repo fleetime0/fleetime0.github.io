@@ -397,7 +397,7 @@ proxy这边的offer_service的逻辑，就是构建了一个VSOMEIP_OFFER_SERVIC
 **几个关键容器：**
 
 1. service_discovery_impl的私有map型容器collected_offers\_，collected_offers\_是一个三维数组\[service]\[instance]\[info]，该变量通过service_discovery_impl::offer_service函数从outing_manager_base 的私有的 services\_容器中拷贝而来所需要的serviceinfo，sd的stop_offer_service与之相反，collected_offers_变量会由on_offer_debounce_timer_expired函数读取
-2. rservice_discovery_impl的私有map型容器epetition_phase_timers_，该容器存放repetition_phase_timers\_类型指针和services_t
+2. service_discovery_impl的私有map型容器epetition_phase_timers_，该容器存放repetition_phase_timers\_类型指针和services_t
 
 **紧接上文的sd模块offer service讲解**
 如果使能了 Service Discovery，则调用:
@@ -495,3 +495,37 @@ C-->D("service_discovery_impl::start()")
   ```
 
   将`repetition_phase_timers_`容器中的服务`is_in_mainphase`属性设置为真，并将容器删除,然后会发送`repetition_phase_timers_`容器中保存的服务`offer service`报文，延时异步再次调用`on_repetition_phase_timer_expired`函数，之后当发送次数达到`repetitions_max_`最大值时，则执行`move_offers_into_main_phase`函数至此，`initial`和`repet`阶段结束，`offer service`的服务服务`is_in_mainphase`属性为真，`on_main_phase_timer_expired`函数中的`send`开始正常执行，发送`main`阶段的`offer service`报文。
+
+## 服务发现的request service梳理
+
+**几个关键容器：**
+
+1. service_discovery_impl的requests_t类型的私有成员变量requested_，requests_t类型的定义如下：
+
+   ```c++
+   typedef std::map<service_t,
+               std::map<instance_t,
+                   std::shared_ptr<request>
+               >
+           > requests_t;
+   ```
+
+首先在`service_discovery_impl::start()`函数中，会调用`start_find_debounce_timer`，`start_find_debounce_timer`的函数声明如下：
+
+```c++
+void start_find_debounce_timer(bool _first_start)
+```
+
+_first_start参数用于标识是不是第一次start，这影响的`start_find_debounce_timer`函数中计时器的时间。相关代码逻辑如下：
+
+```c++
+if (_first_start) {
+    find_debounce_timer_.expires_from_now(initial_delay_, ec);
+} else {
+    find_debounce_timer_.expires_from_now(find_debounce_time_, ec);
+}
+```
+
+然后就会以此计时器调用`on_find_debounce_timer_expired`。
+
+`service_discovery_impl::start()`会以`_first_start`为true调用`start_find_debounce_timer`。
