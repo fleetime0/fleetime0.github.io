@@ -97,9 +97,9 @@ comments:
   # Giscus options › https://giscus.app
   giscus:
     repo: AClumsyDog/AClumsyDog.github.io
-    repo_id: R_kgDOLvMp1g
+    repo_id: R_kgDOLxcj2A
     category: Comments
-    category_id: DIC_kwDOLvMp1s4Cew1_
+    category_id: DIC_kwDOLxcj2M4Ce2QT
     mapping: title
     input_position: bottom
     lang: zh-CN
