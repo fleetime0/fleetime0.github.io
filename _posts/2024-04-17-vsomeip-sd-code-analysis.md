@@ -435,16 +435,25 @@ C-->D("service_discovery_impl::start()")
  start_ttl_timer();
 ```
 
-- `--->start_main_phase_timer();`
-      该函数会异步延时`cyclic_offer_delay_`之后执行`on_main_phase_timer_expired`函数
-
-  ```c++
-  --->on_main_phase_timer_expired(const boost::system::error_code &_error);
-       --->send(true);//该函数调用service_discovery_impl::send(bool _is_announcing)
-            --->insert_offer_entries(its_messages, its_offers, false);
-            --->return send(its_messages);
-            --->start_main_phase_timer();
+- `start_main_phase_timer()`
+  
+  该函数会异步延时`cyclic_offer_delay_`之后执行`on_main_phase_timer_expired`函数
+  `on_main_phase_timer_expired`函数内部执行两个步骤：
+  
+  ```mermaid
+  flowchart
+  A("service_discovery_impl::send(bool _is_announcing)")-->B("start_main_phase_timer()")
   ```
+  
+  `service_discovery_impl::send`函数步骤如下：
+  
+  ```mermaid
+  flowchart
+  A("service_discovery_impl::send(bool _is_announcing)")-->B("insert_offer_entries(its_messages, its_offers, false)")
+  B-->C("service_discovery_impl::send(const std::vector message_impl)")
+  ```
+  
+  
   
   在`send(true)`函数内会调用`insert_offer_entries`函数，该函数原型为:
   
@@ -462,27 +471,27 @@ C-->D("service_discovery_impl::start()")
    }
   ```
   
-  若第三个变量为`false`，则会判断对应的服务实例是否进入`main`阶段，若没有进入则不进行处理，直接返回，因此`its_messages`为空，然后再`send(its_messages); `      
+  若第三个变量为`false`，则会判断对应的服务实例是否进入`main`阶段，若没有进入则不进行处理，直接返回，因此`its_messages`为空，然后再`send(its_messages)`      
   
-  其中，由于 `its_messages `的`entry`字段为空，因此不会发送`offer service`报文。否则，代表进入`main`阶   段，开始循环`cyclic_offer_delay_`发送`offerservice`报文.
+  其中，由于 `its_messages `的`entry`字段为空，因此不会发送`offer service`报文。否则，代表进入`main`阶   段，开始循环`cyclic_offer_delay_`发送`offerservice`报文。
+  
+  最后再调用`start_main_phase_timer();`重启main_phase定时器，循环往复。
+  
+- `start_offer_debounce_timer(true)`
 
-  最后再调用`start_main_phase_timer();`重启main_phase定时器，循环往复
+  首先会判断是否第一次开始，若是首次开始，则初始化延时`initial_delay_`，否则延时`offer_debounce_time_`，该时间为去抖动时间，即两个发送报文最短时间间隔，然后会异步调用`on_offer_debounce_timer_expired`函数
 
-- `--->start_offer_debounce_timer(true);`
-      首先会判断是否第一次开始，若是首次开始，则初始化延时`initial_delay_`，否则延时`offer_debounce_time_`，该时间为去抖动时间，即两个发送报文最短时间间隔，然后会异步调用`on_offer_debounce_timer_expired`函数
-     - `--->on_offer_debounce_timer_expired(const boost::system::error_code &_error);`
-           该函数会依据`collected_offers_`内的服务发送第一个`offer service`报文，作为`initial`阶段结束，并将服务转移至 `repetition_phase_timers`_容器中，然后判断变量`repetitions_max_`是否为0，为0则延时`cyclic_offer_delay_`直接进入`main`阶段，否则延时`repetitions_base_delay_`，并设置`its_repetitions`为1，统计循环发送`offer service`报文次数，待延时结束后，则直接异步调用`on_repetition_phase_timer_expired`函数.
-           该函数原型为：
-           ```c++
-           on_repetition_phase_timer_expired(const boost::system::error_code &_error,
-                    			const std::shared_ptr<boost::asio::steady_timer>&_timer,
-                               std::uint8_t _repetition, std::uint32_t _last_delay);
-           ```
-           该函数首先会判断重复次数是否剩余为0，为0则调用以下函数
-              
-        ```c++
-        move_offers_into_main_phase(_timer);
-        ```
-       
-        将`repetition_phase_timers_`容器中的服务`is_in_mainphase`属性设置为真，并将容器删除,然后会发送`repetition_phase_timers_`容器中保存的服务`offer service`报文，延时异步再次调用`on_repetition_phase_timer_expired`函数，之后当发送次数达到`repetitions_max_`最大值时，则执行`move_offers_into_main_phase`函数
-       至此，`initial`和`repet`阶段结束，`offer service`的服务服务`is_in_mainphase`属性为真，`on_main_phase_timer_expired`函数中的`send`开始正常执行，发送`main`阶段的`offer service`报文
+  该函数会依据`collected_offers_`内的服务发送第一个`offer service`报文，作为`initial`阶段结束，并将服务转移至 `repetition_phase_timers`_容器中，然后判断变量`repetitions_max_`是否为0，为0则延时`cyclic_offer_delay_`直接进入`main`阶段，否则延时`repetitions_base_delay_`，并设置`its_repetitions`为1，统计循环发送`offer service`报文次数，待延时结束后，则直接异步调用`on_repetition_phase_timer_expired`函数。
+   该函数原型为：
+
+  ```c++
+   on_repetition_phase_timer_expired(const boost::system::error_code &_error,
+            			const std::shared_ptr<boost::asio::steady_timer>&_timer,
+                       std::uint8_t _repetition, std::uint32_t _last_delay);
+  ```
+   该函数首先会判断重复次数是否剩余为0，为0则调用以下函数
+  ```c++
+  move_offers_into_main_phase(_timer);
+  ```
+
+  将`repetition_phase_timers_`容器中的服务`is_in_mainphase`属性设置为真，并将容器删除,然后会发送`repetition_phase_timers_`容器中保存的服务`offer service`报文，延时异步再次调用`on_repetition_phase_timer_expired`函数，之后当发送次数达到`repetitions_max_`最大值时，则执行`move_offers_into_main_phase`函数至此，`initial`和`repet`阶段结束，`offer service`的服务服务`is_in_mainphase`属性为真，`on_main_phase_timer_expired`函数中的`send`开始正常执行，发送`main`阶段的`offer service`报文。
