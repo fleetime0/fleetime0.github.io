@@ -119,6 +119,7 @@ Boost库包含了超过150个不同的组件（库），每个组件都提供特
    ./bootstrap.sh --with-libraries="system,thread,filesystem" --prefix="/home/test/boost_output"
    ```
    对于Windows用户，可以使用 `bootstrap.bat`。
+   使用--with-libraries选择所编译的模块。--prefix指定boost库的安装路径。
 
 3. **配置编译器**：
    在命令行中执行以下命令来配置编译环境：

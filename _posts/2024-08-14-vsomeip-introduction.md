@@ -51,7 +51,7 @@ sudo apt-get update
 sudo apt-get install build-essential cmake gcc
 ```
 
-boost库的编译安装可参考[boost库的简单介绍](/posts/boost-introduction)
+boost库的编译安装可参考[boost库的简单介绍](/posts/boost-introduction)，vsomeip只需要system,thread,filesystem这三个模块。
 如果需要运行 VSOMEIP 的测试用例，则需要下载gtest（需要1.7.0版本）
 
 ### 2. 获取 VSOMEIP 源代码
