@@ -532,3 +532,363 @@ COMMAND ${PROJECT_BINARY_DIR}/test/${TEST_E2E_PROFILE_04_EXTERNAL_MASTER_START_S
 set_tests_properties(${TEST_E2E_PROFILE_04_NAME}_external PROPERTIES TIMEOUT 180)
 ```
 
+## cyclonedds中ctest的使用
+
+cyclonedds因为使用了`gtest_add_tests()`，所以相对比较简单。
+
+```cmake
+find_package(GTest REQUIRED)
+
+idlcxx_generate(TARGET ddscxx_test_types FILES
+  data/Space.idl
+  data/KeylessSpace.idl
+  data/HelloWorldData.idl
+  data/Serialization.idl
+  data/CdrDataModels.idl
+  data/CdrDataModels_pragma.idl
+  data/EntityProperties.idl
+  data/EntityProperties_pragma.idl
+  data/ExtendedTypesModels.idl
+  data/RegressionModels.idl
+  data/RegressionModels_pragma.idl
+  data/ExternalModels.idl
+  data/KeyHashModels.idl
+  data/TraitsModels.idl
+  WARNINGS no-implicit-extensibility)
+
+configure_file(
+  config_simple.xml.in config_simple.xml @ONLY)
+
+if(ENABLE_ICEORYX)
+  # Packages required packages for Iceoryx tests
+  find_package(iceoryx_posh REQUIRED)
+  find_package(iceoryx_posh_testing REQUIRED)
+endif()
+
+set(sources
+  Bounded.cpp
+  EntityStatus.cpp
+  Listener.cpp
+  ListenerStress.cpp
+  DomainParticipant.cpp
+  Exception.cpp
+  Conversions.cpp
+  FindDataWriter.cpp
+  FindDataReader.cpp
+  Topic.cpp
+  Publisher.cpp
+  Serdata.cpp
+  Subscriber.cpp
+  DataWriter.cpp
+  DataReader.cpp
+  DataReaderSelector.cpp
+  DataReaderManipulatorSelector.cpp
+  Duration.cpp
+  Time.cpp
+  Query.cpp
+  WaitSet.cpp
+  Qos.cpp
+  Condition.cpp
+  Util.cpp
+  CDRStreamer.cpp
+  GeneratedEntities.cpp
+  ExtendedTypes.cpp
+  Regression.cpp
+  External.cpp
+  DataModels.cpp
+  SampleInfo.cpp
+  DeferredDestruction.cpp
+  KeyHash.cpp)
+
+if (ENABLE_TYPELIB AND ENABLE_TOPIC_DISCOVERY)
+  # Add topic/type discovery tests
+  list(APPEND sources
+    FindTopic.cpp
+    TopicTypeDiscovery.cpp)
+endif()
+
+if (ENABLE_QOS_PROVIDER)
+  list(APPEND sources
+    QosProvider.cpp)
+endif()
+
+if(ENABLE_ICEORYX)
+  list(APPEND sources Iceoryx.cpp)
+endif()
+
+add_executable(ddscxx_tests ${sources})
+
+# Disable the static analyzer in GCC to avoid crashing the GNU C++ compiler
+# on Azure Pipelines
+if(DEFINED ENV{SYSTEM_TEAMFOUNDATIONSERVERURI})
+  if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND ANALYZER STREQUAL "on")
+    target_compile_options(ddscxx_tests PRIVATE -fno-analyzer)
+  endif()
+endif()
+
+target_include_directories(
+  ddscxx_tests
+  PRIVATE
+    "$<BUILD_INTERFACE:${CYCLONE_SOURCE_DIR}/src/core/ddsc/src>")
+
+
+set_property(TARGET ddscxx_tests PROPERTY CXX_STANDARD ${cyclonedds_cpp_std_to_use})
+target_link_libraries(
+  ddscxx_tests PRIVATE
+    CycloneDDS-CXX::ddscxx
+    GTest::GTest
+    GTest::Main
+    ddscxx_test_types)
+
+if(ENABLE_ICEORYX)
+  target_link_libraries(
+    ddscxx_tests PRIVATE
+      iceoryx_posh::iceoryx_posh_roudi
+      iceoryx_posh_testing::iceoryx_posh_testing
+      # iceoryx_posh_testing depends on GoogleMock but does not propagate the
+      # the dependency. Workaround it by requiring the package here.
+      GTest::GMock
+      GTest::GMockMain)
+endif()
+
+target_link_libraries(ddscxx_tests ${TEST_LINK_LIBS})
+
+gtest_add_tests(TARGET ddscxx_tests SOURCES ${sources} TEST_LIST tests)
+
+# Ensure shared libraries are found
+if(WIN32)
+  set(sep ";")
+  set(var "PATH")
+elseif(APPLE)
+  set(sep ":")
+  set(var "DYLD_LIBRARY_PATH")
+else()
+  set(sep ":")
+  set(var "LD_LIBRARY_PATH")
+endif()
+
+get_target_property(cyclonedds_lib CycloneDDS::ddsc LOCATION)
+get_target_property(gtest_lib GTest::GTest IMPORTED_LOCATION)
+get_target_property(gtest_main_lib GTest::Main IMPORTED_LOCATION)
+if(ENABLE_ICEORYX)
+  get_target_property(gmock_lib GTest::GMock IMPORTED_LOCATION)
+  get_target_property(gmock_main_lib GTest::GMockMain IMPORTED_LOCATION)
+endif()
+
+# Ignore false positives due to gtest not being compiled with asan
+if(SANITIZER MATCHES "address")
+  foreach(test ${tests})
+    set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT "ASAN_OPTIONS=detect_container_overflow=0")
+  endforeach()
+endif()
+
+foreach(lib ${cyclonedds_lib} ${gtest_lib} ${gtest_main_lib} ${gmock_lib} ${gmock_main_lib})
+  get_filename_component(libdir "${lib}" PATH)
+  file(TO_NATIVE_PATH "${libdir}" libdir)
+
+  foreach(test ${tests})
+    get_property(envvars TEST ${test} PROPERTY ENVIRONMENT)
+    list(LENGTH envvars n)
+    set(add TRUE)
+    if(n GREATER 0)
+      math(EXPR n "${n} - 1")
+      foreach(i RANGE 0 ${n})
+        list(GET envvars ${i} envvar)
+        if(envvar MATCHES "^${var}=")
+          list(REMOVE_AT envvars ${i})
+          set_property(TEST ${test} PROPERTY ENVIRONMENT "${envvars}")
+          string(REGEX REPLACE "^${var}=" "" paths "${envvar}")
+          string(REPLACE ";" "\\;" paths "${var}=${libdir}${sep}${paths}")
+          set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT "${paths}")
+          set(add FALSE)
+          break()
+        endif()
+      endforeach()
+    endif()
+    if(add)
+      set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT "${var}=${libdir}")
+    endif()
+  endforeach()
+endforeach()
+```
+
+这个 CMake 片段主要用于设置和构建一个名为 `ddscxx_tests` 的测试可执行文件，并处理与测试框架（如 Google Test 和 Iceoryx）相关的配置。它还涉及到一些环境变量的设置和特殊编译器选项的处理。以下是逐步的分析：
+
+### 1. 引入必要的包和依赖
+
+```cmake
+find_package(GTest REQUIRED)
+```
+- 查找并引入 Google Test 库，确保项目可以使用 GTest 进行测试。
+
+### 2. 生成 IDL 文件
+
+```cmake
+idlcxx_generate(TARGET ddscxx_test_types FILES
+  ...
+  WARNINGS no-implicit-extensibility)
+```
+- 使用 `idlcxx_generate` 命令生成目标 `ddscxx_test_types`，这是一个基于一组 IDL 文件的类型库，可能用于 DDS（数据分发服务）系统中。
+- `WARNINGS no-implicit-extensibility` 表示在生成类型时不允许隐式的可扩展性（通常用于确保数据类型的稳定性）。
+
+### 3. 配置 XML 文件
+
+```cmake
+configure_file(
+  config_simple.xml.in config_simple.xml @ONLY)
+```
+- 配置并生成 `config_simple.xml` 文件，使用 `.in` 文件中的内容和定义的变量进行替换（`@ONLY` 选项表示只替换 `@VAR@` 形式的变量）。
+
+### 4. 条件性引入 Iceoryx
+
+```cmake
+if(ENABLE_ICEORYX)
+  find_package(iceoryx_posh REQUIRED)
+  find_package(iceoryx_posh_testing REQUIRED)
+endif()
+```
+- 如果启用了 Iceoryx，则引入必要的 Iceoryx 相关库（`iceoryx_posh` 和 `iceoryx_posh_testing`）。Iceoryx 是一种用于零拷贝数据传输的中间件。
+
+### 5. 定义测试源文件
+
+```cmake
+set(sources
+  ...
+  DeferredDestruction.cpp
+  KeyHash.cpp)
+```
+- 列举了一系列用于构建 `ddscxx_tests` 可执行文件的源文件。
+
+### 6. 条件性增加源文件
+
+```cmake
+if (ENABLE_TYPELIB AND ENABLE_TOPIC_DISCOVERY)
+  list(APPEND sources FindTopic.cpp TopicTypeDiscovery.cpp)
+endif()
+
+if (ENABLE_QOS_PROVIDER)
+  list(APPEND sources QosProvider.cpp)
+endif()
+
+if(ENABLE_ICEORYX)
+  list(APPEND sources Iceoryx.cpp)
+endif()
+```
+- 根据特定的编译选项（如 `ENABLE_TYPELIB`、`ENABLE_TOPIC_DISCOVERY`、`ENABLE_QOS_PROVIDER` 和 `ENABLE_ICEORYX`），向源文件列表中添加额外的源文件。
+
+### 7. 创建可执行文件并设置编译选项
+
+```cmake
+add_executable(ddscxx_tests ${sources})
+
+if(DEFINED ENV{SYSTEM_TEAMFOUNDATIONSERVERURI})
+  if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND ANALYZER STREQUAL "on")
+    target_compile_options(ddscxx_tests PRIVATE -fno-analyzer)
+  endif()
+endif()
+```
+- 创建 `ddscxx_tests` 可执行文件，并在特定条件下（比如在 Azure Pipelines 上构建时使用 GNU 编译器）禁用静态分析器（`-fno-analyzer`），以避免编译器崩溃。
+
+### 8. 设置包含目录
+
+```cmake
+target_include_directories(
+  ddscxx_tests
+  PRIVATE
+    "$<BUILD_INTERFACE:${CYCLONE_SOURCE_DIR}/src/core/ddsc/src>")
+```
+- 设置 `ddscxx_tests` 的私有包含目录，确保它可以访问 Cyclone DDS 的核心代码。
+
+### 9. 链接库
+
+```cmake
+target_link_libraries(
+  ddscxx_tests PRIVATE
+    CycloneDDS-CXX::ddscxx
+    GTest::GTest
+    GTest::Main
+    ddscxx_test_types)
+```
+- 链接 `ddscxx_tests` 所需的库，包括 Cyclone DDS C++ 库、Google Test 库和生成的 `ddscxx_test_types` 库。
+
+### 10. 条件性链接 Iceoryx 相关库
+
+```cmake
+if(ENABLE_ICEORYX)
+  target_link_libraries(
+    ddscxx_tests PRIVATE
+      iceoryx_posh::iceoryx_posh_roudi
+      iceoryx_posh_testing::iceoryx_posh_testing
+      GTest::GMock
+      GTest::GMockMain)
+endif()
+```
+- 如果启用了 Iceoryx，则额外链接 Iceoryx 相关的库，并解决 Google Mock 的依赖问题。
+
+### 11. 添加测试
+
+```cmake
+gtest_add_tests(TARGET ddscxx_tests SOURCES ${sources} TEST_LIST tests)
+```
+- 使用 `gtest_add_tests` 自动扫描和添加测试，并生成一个测试列表 `tests`。
+
+### 12. 设置环境变量以确保找到共享库
+
+```cmake
+if(WIN32)
+  set(sep ";")
+  set(var "PATH")
+elseif(APPLE)
+  set(sep ":")
+  set(var "DYLD_LIBRARY_PATH")
+else()
+  set(sep ":")
+  set(var "LD_LIBRARY_PATH")
+endif()
+```
+- 设置适当的环境变量名称和路径分隔符，以便在不同操作系统上找到共享库。
+
+### 13. 获取库路径并设置测试环境
+
+```cmake
+get_target_property(cyclonedds_lib CycloneDDS::ddsc LOCATION)
+get_target_property(gtest_lib GTest::GTest IMPORTED_LOCATION)
+get_target_property(gtest_main_lib GTest::Main IMPORTED_LOCATION)
+if(ENABLE_ICEORYX)
+  get_target_property(gmock_lib GTest::GMock IMPORTED_LOCATION)
+  get_target_property(gmock_main_lib GTest::GMockMain IMPORTED_LOCATION)
+endif()
+```
+- 获取 CycloneDDS、GTest 和 GMock 库的路径，用于设置环境变量。
+
+```cmake
+foreach(lib ${cyclonedds_lib} ${gtest_lib} ${gtest_main_lib} ${gmock_lib} ${gmock_main_lib})
+  get_filename_component(libdir "${lib}" PATH)
+  file(TO_NATIVE_PATH "${libdir}" libdir)
+
+  foreach(test ${tests})
+    get_property(envvars TEST ${test} PROPERTY ENVIRONMENT)
+    list(LENGTH envvars n)
+    set(add TRUE)
+    if(n GREATER 0)
+      math(EXPR n "${n} - 1")
+      foreach(i RANGE 0 ${n})
+        list(GET envvars ${i} envvar)
+        if(envvar MATCHES "^${var}=")
+          list(REMOVE_AT envvars ${i})
+          set_property(TEST ${test} PROPERTY ENVIRONMENT "${envvars}")
+          string(REGEX REPLACE "^${var}=" "" paths "${envvar}")
+          string(REPLACE ";" "\\;" paths "${var}=${libdir}${sep}${paths}")
+          set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT "${paths}")
+          set(add FALSE)
+          break()
+        endif()
+      endforeach()
+    endif()
+    if(add)
+      set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT "${var}=${libdir}")
+    endif()
+  endforeach()
+endforeach()
+```
+- 这段代码确保在运行测试时，测试环境中包含了必要的库路径。它遍历每个测试并为其设置正确的环境变量，以便动态链接库在运行时可以被找到。
