@@ -2,7 +2,7 @@
 title: vsomeip源码分析
 date: 2024-04-17 14:45 +0800
 last_modified_at: 2024-04-18 11:17 +0800
-author: AClumsyDog
+author: FeetingTimes
 categories: ["开源库", "vsomeip"]
 tags: ["c++", "someip", "autosar"]
 pin: true

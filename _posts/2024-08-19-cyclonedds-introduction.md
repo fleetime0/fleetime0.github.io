@@ -2,7 +2,7 @@
 title: cyclonedds库的简单介绍
 date: 2024-08-19 15:21 +0800
 last_modified_at: 2024-08-19 15:21 +0800
-author: AClumsyDog
+author: FeetingTimes
 categories: ["开源库", "cyclonedds"]
 tags: ["c++", "cyclonedds"]
 pin: true

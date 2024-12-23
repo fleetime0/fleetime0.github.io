@@ -14,7 +14,7 @@ timezone: Asia/Shanghai
 # jekyll-seo-tag settings › https://github.com/jekyll/jekyll-seo-tag/blob/master/docs/usage.md
 # ↓ --------------------------
 
-title: AClumsyDog # the main title
+title: FeetingTimes # the main title
 
 tagline: 一只c++菜鸟程序员 # it will display as the sub-title
 
@@ -23,10 +23,10 @@ description: >- # used by seo meta and the atom feed
 
 # Fill in the protocol & hostname for your site.
 # e.g. 'https://username.github.io', note that it does not end with a '/'.
-url: "https://aclumsydog.github.io"
+url: "https://feetingtimes.github.io"
 
 github:
-  username: AClumsyDog # change to your github username
+  username: FeetingTimes # change to your github username
 
 twitter:
   username: twitter_username # change to your twitter username
@@ -34,12 +34,12 @@ twitter:
 social:
   # Change to your full name.
   # It will be displayed as the default author of the posts and the copyright owner in the Footer
-  name: AClumsyDog
+  name: FeetingTimes
   email: 3176226599@qq.com # change to your email address
   links:
     # The first element serves as the copyright owner's link
     - https://twitter.com/username # change to your twitter homepage
-    - https://github.com/AClumsyDog # change to your github homepage
+    - https://github.com/FeetingTimes # change to your github homepage
     # Uncomment below to add more social links
     # - https://www.facebook.com/username
     # - https://www.linkedin.com/in/username
@@ -96,14 +96,14 @@ comments:
     issue_term: # < url | pathname | title | ...>
   # Giscus options › https://giscus.app
   giscus:
-    repo: AClumsyDog/AClumsyDog.github.io
-    repo_id: R_kgDOLxcj2A
-    category: Comments
-    category_id: DIC_kwDOLxcj2M4Ce2QT
-    mapping: title
-    input_position: bottom
-    lang: zh-CN
-    reactions_enabled: 1
+    repo: # <gh-username>/<repo>
+    repo_id:
+    category:
+    category_id:
+    mapping: # optional, default to 'pathname'
+    input_position: # optional, default to 'bottom'
+    lang: # optional, default to the value of `site.lang`
+    reactions_enabled: # optional, default to the value of `1`
 
 # Self-hosted static assets, optional › https://github.com/cotes2020/chirpy-static-assets
 assets:
@@ -207,7 +207,7 @@ jekyll_compose:
   default_front_matter:
     drafts:
       last_modified_at:
-      author: AClumsyDog
+      author: FeetingTimes
       categories:
       tags:
       math: true
@@ -215,7 +215,7 @@ jekyll_compose:
       img_path: /assets/img/
     posts:
       last_modified_at:
-      author: AClumsyDog
+      author: FeetingTimes
       categories:
       tags:
       pin: true

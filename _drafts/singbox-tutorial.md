@@ -1,7 +1,7 @@
 ---
 title: singbox-tutorial
 last_modified_at:
-author: AClumsyDog
+author: FeetingTimes
 categories: ["科学上网"]
 tags: ["科学上网", "singbox"]
 math: true
