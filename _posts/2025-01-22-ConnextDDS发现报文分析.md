@@ -2,7 +2,7 @@
 title: ConnextDDS发现报文分析
 date: 2025-01-22 17:31 +0800
 last_modified_at: 2025-01-22 17:31 +0800
-author: FeetingTimes
+author: fleetime0
 categories: ["DDS", "rtidds"]
 tags: ["c++", "rtidds", "dds"]
 pin: true

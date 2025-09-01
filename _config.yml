@@ -14,7 +14,7 @@ timezone: Asia/Shanghai
 # jekyll-seo-tag settings › https://github.com/jekyll/jekyll-seo-tag/blob/master/docs/usage.md
 # ↓ --------------------------
 
-title: FeetingTimes # the main title
+title: fleetime0 # the main title
 
 tagline: 一只c++菜鸟程序员 # it will display as the sub-title
 
@@ -23,10 +23,10 @@ description: >- # used by seo meta and the atom feed
 
 # Fill in the protocol & hostname for your site.
 # e.g. 'https://username.github.io', note that it does not end with a '/'.
-url: "https://feetingtimes.github.io"
+url: "https://fleetime0.github.io"
 
 github:
-  username: FeetingTimes # change to your github username
+  username: fleetime0 # change to your github username
 
 twitter:
   username: twitter_username # change to your twitter username
@@ -34,12 +34,12 @@ twitter:
 social:
   # Change to your full name.
   # It will be displayed as the default author of the posts and the copyright owner in the Footer
-  name: FeetingTimes
+  name: fleetime0
   email: 3176226599@qq.com # change to your email address
   links:
     # The first element serves as the copyright owner's link
     - https://twitter.com/username # change to your twitter homepage
-    - https://github.com/FeetingTimes # change to your github homepage
+    - https://github.com/fleetime0 # change to your github homepage
     # Uncomment below to add more social links
     # - https://www.facebook.com/username
     # - https://www.linkedin.com/in/username
@@ -96,7 +96,7 @@ comments:
     issue_term: # < url | pathname | title | ...>
   # Giscus options › https://giscus.app
   giscus:
-    repo: FeetingTimes/FeetingTimes.github.io
+    repo: fleetime0/fleetime0.github.io
     repo_id: R_kgDONhPrUQ
     category: Comments
     category_id: DIC_kwDONhPrUc4Cl3fF
@@ -207,7 +207,7 @@ jekyll_compose:
   default_front_matter:
     drafts:
       last_modified_at:
-      author: FeetingTimes
+      author: fleetime0
       categories:
       tags:
       math: true
@@ -215,7 +215,7 @@ jekyll_compose:
       img_path: /assets/img/
     posts:
       last_modified_at:
-      author: FeetingTimes
+      author: fleetime0
       categories:
       tags:
       pin: true

@@ -2,7 +2,7 @@
 title: ConnextDDS零拷贝
 date: 2025-01-23 8:11 +0800
 last_modified_at: 2025-01-23 8:11 +0800
-author: FeetingTimes
+author: fleetime0
 categories: ["DDS", "rtidds"]
 tags: ["c++", "rtidds", "dds"]
 pin: true

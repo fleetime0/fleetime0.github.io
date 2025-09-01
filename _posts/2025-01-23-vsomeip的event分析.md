@@ -2,7 +2,7 @@
 title: vsomeip的event分析
 date: 2025-01-23 10:15 +0800
 last_modified_at: 2025-01-23 10:15 +0800
-author: FeetingTimes
+author: fleetime0
 categories: ["开源库", "vsomeip"]
 tags: ["c++", "someip"]
 pin: true

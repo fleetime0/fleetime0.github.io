@@ -2,7 +2,7 @@
 title: vsomeip-sd模块源码分析
 date: 2024-04-17 14:57 +0800
 last_modified_at: 2024-04-19 11:21 +0800
-author: FeetingTimes
+author: fleetime0
 categories: ["开源库", "vsomeip"]
 tags: ["c++", "someip", "autosar"]
 pin: true

@@ -2,7 +2,7 @@
 title: 从开源库研究cmake的ctest
 date: 2024-08-19 10:55 +0800
 last_modified_at: 2024-08-19 10:55 +0800
-author: FeetingTimes
+author: fleetime0
 categories: ["cmake"]
 tags: ["c++", "cmake"]
 pin: true
